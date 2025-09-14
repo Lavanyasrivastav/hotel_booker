@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Search Results - HotelBooker</title>
+  <link rel="stylesheet" href="style3.css" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <meta name="description" content="Search results for hotels" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-grid">
+      <a class="brand" href="index3.html">HotelBooker</a>
+      <nav class="nav">
+        <a href="index3.html">Home</a>
+        <a href="#hotels">Hotels</a>
+        <a href="#deals">Deals</a>
+        <a href="#about">About</a>
+        <button id="signinBtn" class="btn btn-ghost">Sign in</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="search-header container">
+      <div class="search-info">
+        <h1>Search Results</h1>
+        <div class="search-summary">
+          <span id="searchLocation">Showing results for: <strong id="locationText"></strong></span>
+          <span id="resultCount"></span>
+        </div>
+        
+        <!-- Test Search Buttons for Debugging -->
+        <div class="test-search-buttons">
+          <button onclick="testSearch('Goa')" class="btn btn-ghost">Test: Goa</button>
+          <button onclick="testSearch('Mumbai')" class="btn btn-ghost">Test: Mumbai</button>
+          <button onclick="testSearch('Jaipur')" class="btn btn-ghost">Test: Jaipur</button>
+          <button onclick="testSearch('')" class="btn btn-ghost">Test: All Hotels</button>
+        </div>
+      </div>
+      
+      <!-- Search Form -->
+      <form id="searchForm" class="search-form" aria-label="Search hotels">
+        <div class="row">
+          <input id="q" name="q" type="search" placeholder="City, hotel or landmark" aria-label="Search destination" />
+          <input id="checkin" name="checkin" type="date" aria-label="Check-in date" />
+          <input id="checkout" name="checkout" type="date" aria-label="Check-out date" />
+          <select id="guests" name="guests" aria-label="Guests">
+            <option value="1">1 guest</option>
+            <option value="2" selected>2 guests</option>
+            <option value="3">3 guests</option>
+            <option value="4">4 guests</option>
+          </select>
+          <button type="submit" class="btn btn-primary">Search</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Filters Section -->
+    <section id="filters" class="container filters">
+      <div class="filter-group">
+        <label>Price</label>
+        <input type="range" id="priceRange" min="50" max="1000" step="10" value="300" />
+        <div class="small">Up to ₹ <span id="priceValue">300</span></div>
+      </div>
+
+      <div class="filter-group">
+        <label>Star rating</label>
+        <div class="stars">
+          <button class="star" data-value="5">5★</button>
+          <button class="star" data-value="4">4★</button>
+          <button class="star" data-value="3">3★</button>
+          <button class="star" data-value="any">Any</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Amenities</label>
+        <div class="amenities">
+          <label><input type="checkbox" name="wifi" /> Free Wi‑Fi</label>
+          <label><input type="checkbox" name="pool" /> Pool</label>
+          <label><input type="checkbox" name="parking" /> Parking</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Search Results -->
+    <section id="hotels" class="container hotel-grid">
+      <!-- Hotel cards will be injected by JavaScript -->
+    </section>
+
+    <!-- No Results Message -->
+    <div id="noResults" class="no-results container" style="display: none;">
+      <div class="no-results-content">
+        <h2>No hotels found</h2>
+        <p>Try adjusting your search criteria or check your spelling.</p>
+        <a href="index3.html" class="btn btn-primary">Back to Home</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>HotelBooker</strong>
+        <p>© <span id="year"></span> — Built with care.</p>
+      </div>
+      <nav class="fnav">
+        <a href="#">Help</a>
+        <a href="#">Terms</a>
+        <a href="#">Privacy</a>
+      </nav>
+    </div>
+  </footer>
+
+  <!-- Booking Modal -->
+  <div id="bookingModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-panel" role="document">
+      <button class="modal-close" aria-label="Close">✕</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script src="search-results.js"></script>
+</body>
+</html>
