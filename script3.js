@@ -1,303 +1,412 @@
+// ======================================
+// HotelBooker Frontend (PHP Backend Connected + Payment + Booking)
+// ======================================
 
-(function(){
-  // sample dataset - in real app this would come from API
-  const hotels = [
-    {id:1,name:'SeaView Resort',city:'Goa',price:420,stars:5,desc:'Beachfront resort with infinity pool',img:'https://images.unsplash.com/photo-1501117716987-c8e2e2b0f47a?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=0d7f6d0a3b7c8ad7a1a9e6ff9b8c2b6e'},
-    {id:2,name:'Urban Stay',city:'Mumbai',price:320,stars:4,desc:'Modern rooms in the city center',img:'https://images.unsplash.com/photo-1560347876-aeef00ee58a1?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=2c66f6f6e3f2b6a8a7c2d6b8f0a3b1c9'},
-    {id:3,name:'Hilltop Inn',city:'Manali',price:270,stars:3,desc:'Cozy inn with mountain view',img:'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=1b36f7b4cb3f99c0f233d3b6a0cb3e9a'},
-    {id:4,name:'Lakeside Hotel',city:'Udaipur',price:500,stars:5,desc:'Luxury suites facing the lake',img:'https://images.unsplash.com/photo-1526772662000-3f88f10405ff?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=d1a2b3c4d5e6f7890a1b2c3d4e5f6a7b'},
-    {id:5,name:'Budget Rooms',city:'Jaipur',price:110,stars:2,desc:'Affordable clean rooms',img:'https://images.unsplash.com/photo-1455587734955-081b22074882?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=7890abcd1234567890abcd1234567890'},
-    {id:6,name:'City Boutique',city:'Pune',price:360,stars:4,desc:'Boutique stay with great cafe',img:'https://images.unsplash.com/photo-1551892589-865f69869470?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=abcd1234ef567890abcd1234ef567890'}
-  ];
+(function () {
+  // --------------------------
+  // 1️⃣ Base Configuration
+  // --------------------------
+  const API_BASE_URL = "http://localhost/hotel-booker/backend";
 
-  // render helpers
-  const hotelGrid = document.getElementById('hotels');
-  const dealList = document.getElementById('dealList');
-  const priceValue = document.getElementById('priceValue');
-  const priceRange = document.getElementById('priceRange');
-  const modal = document.getElementById('bookingModal');
-  const modalContent = document.getElementById('modalContent');
+  let currentUser = null;
+  let authToken = localStorage.getItem("authToken");
 
-  // Add smooth scroll behavior for navigation links
-  function initSmoothScroll() {
-    const navLinks = document.querySelectorAll('nav a[href^="#"]');
-    navLinks.forEach(link => {
-      link.addEventListener('click', function(e) {
-        e.preventDefault();
-        const targetId = this.getAttribute('href');
-        const targetSection = document.querySelector(targetId);
-        
-        if (targetSection) {
-          targetSection.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-          });
-        }
+  // --------------------------
+  // 2️⃣ API Helper
+  // --------------------------
+  const api = {
+    async request(endpoint, options = {}) {
+      const url = `${API_BASE_URL}${endpoint}`;
+      const config = {
+        headers: { "Content-Type": "application/json", ...options.headers },
+        ...options,
+      };
+      try {
+        const response = await fetch(url, config);
+        const text = await response.text();
+        const data = JSON.parse(text.trim());
+        return data;
+      } catch (error) {
+        console.error("API Error:", error);
+        return { success: false, error: error.message };
+      }
+    },
+
+    // --------------------------
+    // 🏨 Hotels
+    // --------------------------
+    async getHotels(params = {}) {
+      const queryString = new URLSearchParams(params).toString();
+      return this.request(`/hotels.php?${queryString}`);
+    },
+
+    async searchHotels(query, filters = {}) {
+      const params = { q: query, ...filters };
+      const queryString = new URLSearchParams(params).toString();
+      return this.request(`/hotels.php?${queryString}`);
+    },
+
+    async getFeaturedHotels() {
+      const all = await this.getHotels();
+      if (all.success) {
+        const sorted = all.data.sort((a, b) => b.stars - a.stars);
+        return { success: true, data: sorted.slice(0, 3) };
+      }
+      return all;
+    },
+
+    // --------------------------
+    // 👤 Authentication
+    // --------------------------
+    async login(email, password) {
+      const response = await this.request(`/auth.php?action=login`, {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
       });
-    });
+      if (response.success) {
+        currentUser = response.user;
+        localStorage.setItem("user", JSON.stringify(currentUser));
+      }
+      return response;
+    },
+
+    async register(userData) {
+      const response = await this.request(`/auth.php?action=register`, {
+        method: "POST",
+        body: JSON.stringify(userData),
+      });
+      if (response.success) alert("Registration successful!");
+      return response;
+    },
+
+    async logout() {
+      currentUser = null;
+      localStorage.removeItem("user");
+      updateAuthUI();
+    },
+
+    async getCurrentUser() {
+      const saved = localStorage.getItem("user");
+      return saved ? JSON.parse(saved) : null;
+    },
+
+    // --------------------------
+    // 💳 Payments
+    // --------------------------
+    async createPayment(paymentData) {
+      // { user_id, amount, method }
+      return this.request(`/payments.php?action=create`, {
+        method: "POST",
+        body: JSON.stringify(paymentData),
+      });
+    },
+
+    async getPaymentStatus(paymentRef) {
+      return this.request(`/payments.php?action=status&ref=${encodeURIComponent(paymentRef)}`);
+    },
+
+    // --------------------------
+    // 📅 Bookings
+    // --------------------------
+    async checkAvailability(hotelId, checkIn, checkOut, guests, rooms) {
+      const qs = `?action=availability&hotelId=${encodeURIComponent(hotelId)}&checkIn=${encodeURIComponent(checkIn)}&checkOut=${encodeURIComponent(checkOut)}&guests=${encodeURIComponent(guests)}&rooms=${encodeURIComponent(rooms)}`;
+      return this.request(`/bookings.php${qs}`);
+    },
+
+    async createBooking(bookingData) {
+      return this.request(`/bookings.php?action=create`, {
+        method: "POST",
+        body: JSON.stringify(bookingData),
+      });
+    },
+  };
+
+  // --------------------------
+  // 3️⃣ UI Elements
+  // --------------------------
+  const hotelGrid = document.getElementById("hotels");
+  const dealList = document.getElementById("dealList");
+  const priceValue = document.getElementById("priceValue");
+  const priceRange = document.getElementById("priceRange");
+  const modal = document.getElementById("bookingModal");
+  const modalContent = document.getElementById("modalContent");
+  const signinBtn = document.getElementById("signinBtn");
+
+  // --------------------------
+  // 4️⃣ Auth UI Management
+  // --------------------------
+  function initUserState() {
+    const savedUser = localStorage.getItem("user");
+    if (savedUser) currentUser = JSON.parse(savedUser);
+    updateAuthUI();
   }
 
-  // Add scroll animations
-  function initScrollAnimations() {
-    const observerOptions = {
-      threshold: 0.1,
-      rootMargin: '0px 0px -50px 0px'
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.style.opacity = '1';
-          entry.target.style.transform = 'translateY(0)';
-        }
-      });
-    }, observerOptions);
-
-    // Observe all cards and sections
-    const animatedElements = document.querySelectorAll('.card, .filter-group, .deal, .about, .deals');
-    animatedElements.forEach(el => {
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(30px)';
-      el.style.transition = 'all 0.6s ease-out';
-      observer.observe(el);
-    });
+  function updateAuthUI() {
+    if (!signinBtn) return;
+    if (currentUser) {
+      signinBtn.textContent = currentUser.name || "Account";
+      signinBtn.onclick = () => {
+        if (confirm("Do you want to log out?")) api.logout();
+      };
+    } else {
+      signinBtn.textContent = "Sign in";
+      signinBtn.onclick = () => (window.location.href = "signin.html");
+    }
   }
 
-  // Enhanced hotel rendering with staggered animation
-  function renderHotels(list){
-    hotelGrid.innerHTML = '';
-    list.forEach((h, index) => {
-      const el = document.createElement('article');
-      el.className = 'card';
-      el.style.animationDelay = `${index * 0.1}s`;
+  // --------------------------
+  // 5️⃣ Rendering Functions
+  // --------------------------
+  async function renderHotels(hotels) {
+    hotelGrid.innerHTML = "";
+    if (!hotels || hotels.length === 0) {
+      hotelGrid.innerHTML = `<div class="no-results">No hotels found.</div>`;
+      return;
+    }
+    hotels.forEach((hotel, index) => {
+      const el = document.createElement("article");
+      el.className = "card";
+      const img =
+        hotel.image ||
+        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800";
       el.innerHTML = `
-        <div class="thumb" style="background-image:url(${h.img})"></div>
+        <div class="thumb" style="background-image:url(${img})"></div>
         <div class="content">
-          <h3>${h.name}</h3>
-          <div class="meta">${h.city} • ${h.stars}★</div>
-          <div class="desc">${h.desc}</div>
+          <h3>${hotel.name}</h3>
+          <div class="meta">${hotel.city || ""} ${hotel.state ? ", " + hotel.state : ""} • ${hotel.stars || 3}★</div>
+          <div class="desc">${hotel.description || ""}</div>
           <div class="price-row">
-            <div class="price">₹ ${h.price}</div>
-            <div class="cta"><button class="btn btn-primary" data-id="${h.id}">Book</button></div>
+            <div class="price">₹ ${parseInt(hotel.price).toLocaleString()}</div>
+            <div class="cta"><button class="btn btn-primary" data-id="${hotel.id}">Book</button></div>
           </div>
         </div>
       `;
       hotelGrid.appendChild(el);
-      
-      // Add staggered animation
-      setTimeout(() => {
-        el.style.opacity = '1';
-        el.style.transform = 'translateY(0)';
-      }, index * 100);
+    });
+
+    hotelGrid.querySelectorAll("button[data-id]").forEach((btn) => {
+      btn.addEventListener("click", (e) =>
+        openBooking(e.target.getAttribute("data-id"))
+      );
     });
   }
 
-  function renderDeals(){
-    dealList.innerHTML = '';
-    hotels.slice(0,3).forEach((h, index) => {
-      const d = document.createElement('div'); 
-      d.className='deal';
-      d.style.animationDelay = `${index * 0.2}s`;
-      d.innerHTML = `<strong>${h.name}</strong><div>${h.city}</div><div class="small">From ₹${h.price}/night</div>`;
-      dealList.appendChild(d);
-      
-      // Add staggered animation
-      setTimeout(() => {
-        d.style.opacity = '1';
-        d.style.transform = 'translateY(0)';
-      }, index * 200);
+  function renderDeals(hotels) {
+    dealList.innerHTML = "";
+    if (!hotels || hotels.length === 0) {
+      dealList.innerHTML = `<div class="no-deals">No deals available.</div>`;
+      return;
+    }
+    hotels.forEach((h) => {
+      const div = document.createElement("div");
+      div.className = "deal";
+      div.innerHTML = `<strong>${h.name}</strong><div>${h.city}</div>
+      <div class="small">From ₹${h.price}/night</div>`;
+      dealList.appendChild(div);
     });
   }
 
-  // Enhanced search form with loading state
-  const form = document.getElementById('searchForm');
-  form.addEventListener('submit', function(e){
-    e.preventDefault();
-    
-    // Add loading state
-    const submitBtn = this.querySelector('button[type="submit"]');
-    const originalText = submitBtn.textContent;
-    submitBtn.innerHTML = '<span class="loading"></span> Searching...';
-    submitBtn.disabled = true;
-    
-    // Simulate loading delay for better UX
-    setTimeout(() => {
-      const formData = new FormData(this);
-      const params = new URLSearchParams(formData);
-      window.location.href = `search-results.html?${params.toString()}`;
-    }, 800);
-  });
+  // --------------------------
+  // 6️⃣ Load Data on Home
+  // --------------------------
+  async function loadHotels() {
+    try {
+      const response = await api.getHotels();
+      if (response.success) renderHotels(response.data);
+      else hotelGrid.innerHTML = `<div>Error loading hotels.</div>`;
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
-  // Enhanced price range with smooth updates
-  priceRange.addEventListener('input', function() {
-    const value = this.value;
-    priceValue.textContent = value;
-    
-    // Add smooth color transition based on value
-    const percentage = (value - this.min) / (this.max - this.min) * 100;
-    this.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${percentage}%, #e6e9ee ${percentage}%, #e6e9ee 100%)`;
-  });
+  async function loadDeals() {
+    try {
+      const response = await api.getFeaturedHotels();
+      if (response.success) renderDeals(response.data);
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
-  // Enhanced star rating interaction
-  document.querySelectorAll('.star').forEach(star => {
-    star.addEventListener('click', function() {
-      // Add click animation
-      this.style.transform = 'scale(0.9)';
-      setTimeout(() => {
-        this.style.transform = 'scale(1)';
-      }, 150);
-      
-      // Update active state
-      document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
-      this.classList.add('active');
-    });
-  });
+  // --------------------------
+  // 7️⃣ Booking Modal with Payment
+  // --------------------------
+  async function openBooking(hotelId) {
+    // Require auth before opening booking modal
+    if (!currentUser) {
+      if (confirm('Please sign in to continue with booking. Go to sign in page now?')) {
+        window.location.href = 'signin.html';
+      }
+      return;
+    }
+    modal.setAttribute("aria-hidden", "false");
+    modalContent.innerHTML = `<div style="text-align:center;padding:2rem;"><div class="loading"></div><p>Loading hotel details...</p></div>`;
+    try {
+      const response = await api.getHotels();
+      const hotel = response.data.find((h) => h.id == hotelId);
+      if (!hotel) throw new Error("Hotel not found");
 
-  // Enhanced booking modal with smooth animations
-  function openBooking(id){
-    const hotel = hotels.find(h=>h.id===id);
-    if(!hotel) return;
-    
-    // Add loading state to modal
-    modalContent.innerHTML = `
-      <div style="text-align: center; padding: 2rem;">
-        <div class="loading" style="width: 40px; height: 40px; margin: 0 auto 1rem;"></div>
-        <p>Loading booking form...</p>
-      </div>
-    `;
-    
-    modal.setAttribute('aria-hidden','false');
-
-    // Simulate loading for better UX
-    setTimeout(() => {
       modalContent.innerHTML = `
         <h3>Book: ${hotel.name}</h3>
-        <p class="small">${hotel.city} • ${hotel.stars}★</p>
-        <p>${hotel.desc}</p>
+        <p>${hotel.city} • ${hotel.stars}★</p>
+        <p>${hotel.description}</p>
         <form id="bookForm">
-          <label>Full name <input required name="name" /></label>
-          <label>Email <input required name="email" type="email" /></label>
-          <label>Rooms <select name="rooms"><option>1</option><option>2</option></select></label>
-          <div style="display:flex;gap:.6rem;margin-top:.8rem">
-            <button type="submit" class="btn btn-primary">Confirm</button>
+          <label>Full Name <input name="name" required value="${currentUser?.name || ""}"></label>
+          <label>Email <input name="email" type="email" required value="${currentUser?.email || ""}"></label>
+          <label>Check-in <input name="checkIn" type="date" required></label>
+          <label>Check-out <input name="checkOut" type="date" required></label>
+          <label>Guests <input name="guests" type="number" value="2" required></label>
+          <label>Rooms <input name="rooms" type="number" value="1" required></label>
+          <label>Payment Method
+            <select name="paymentMethod">
+              <option value="credit_card">Credit Card</option>
+              <option value="debit_card">Debit Card</option>
+              <option value="upi">UPI</option>
+            </select>
+          </label>
+          <div style="margin-top:1rem;display:flex;gap:.5rem;">
+            <button type="submit" class="btn btn-primary">Confirm & Pay</button>
             <button type="button" class="btn btn-ghost modal-close">Cancel</button>
           </div>
         </form>
       `;
 
-      const bf = document.getElementById('bookForm');
-      bf.addEventListener('submit', function(ev){
+      const bf = document.getElementById("bookForm");
+      bf.addEventListener("submit", async function (ev) {
         ev.preventDefault();
-        
-        // Add loading state
         const submitBtn = this.querySelector('button[type="submit"]');
         const originalText = submitBtn.textContent;
-        submitBtn.innerHTML = '<span class="loading"></span> Processing...';
+        submitBtn.textContent = "Processing...";
         submitBtn.disabled = true;
-        
-        const formData = new FormData(bf);
-        
-        // Simulate processing delay
-        setTimeout(() => {
-          // Show success message with animation
-          modalContent.innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-              <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
-              <h3 style="color: var(--accent);">Booking Confirmed!</h3>
-              <p>Thanks, <strong>${formData.get('name')}</strong>!</p>
-              <p>A confirmation has been sent to <strong>${formData.get('email')}</strong></p>
-              <button class="btn btn-primary modal-close" style="margin-top: 1rem;">Close</button>
-            </div>
-          `;
-          
-          setTimeout(closeModal, 3000);
-        }, 1500);
+
+        try {
+          const formData = new FormData(bf);
+          const checkIn = formData.get("checkIn");
+          const checkOut = formData.get("checkOut");
+          const guests = parseInt(formData.get("guests"));
+          const rooms = parseInt(formData.get("rooms"));
+          const name = formData.get("name");
+          const paymentMethod = formData.get("paymentMethod");
+
+          // 1️⃣ Check Availability
+          const avail = await api.checkAvailability(hotelId, checkIn, checkOut, guests, rooms);
+          if (!avail.success || !avail.data.isAvailable) {
+            alert("Selected dates are not available.");
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+            return;
+          }
+
+          // 2️⃣ Simulate payment
+          const nights = (new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24);
+          const totalAmount = parseFloat(hotel.price) * Math.max(1, nights) * Math.max(1, rooms);
+          const payRes = await api.createPayment({
+            user_id: currentUser ? currentUser.id : 0,
+            amount: totalAmount,
+            method: paymentMethod
+          });
+
+          if (!payRes.success) {
+            alert("Payment failed. Try again.");
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+            return;
+          }
+
+          const payment_id = payRes.data.payment_id;
+          // 3️⃣ Create Booking
+          const bookingData = {
+            'user_id': currentUser ? currentUser.id : 0,
+            'hotel_id': hotelId,
+            'checkIn':checkIn,
+            'checkOut':checkOut,
+            'guests':guests,
+            'rooms':rooms,
+            'payment_id':payment_id,
+          };
+
+          const bookRes = await api.createBooking(bookingData);
+
+          if (bookRes.success) {
+            modalContent.innerHTML = `
+              <div style="text-align:center;padding:2rem;">
+                <div style="font-size:4rem;">🎉</div>
+                <h3 style="color:var(--accent);">Booking Confirmed!</h3>
+                <p>Thank you, <strong>${name}</strong>!</p>
+                <p>Booking Reference: <strong>${bookRes.data.booking_reference}</strong></p>
+                <p>Total: ₹${bookRes.data.total_amount.toLocaleString()}</p>
+                <button class="btn btn-primary modal-close" style="margin-top:1rem;">Close</button>
+              </div>
+            `;
+          } else {
+            alert("Booking failed: " + (bookRes.error || "Unknown error"));
+          }
+        } catch (err) {
+          alert("Error: " + err.message);
+        } finally {
+          submitBtn.textContent = originalText;
+          submitBtn.disabled = false;
+        }
       });
-    }, 500);
-  }
-
-  function closeModal(){ 
-    modal.setAttribute('aria-hidden','true');
-  }
-
-  // Enhanced event delegation with smooth interactions
-  document.body.addEventListener('click', function(e){
-    const target = e.target;
-    if(target.matches('.btn-primary') && target.dataset.id){
-      const id = Number(target.dataset.id);
-      
-      // Add click animation
-      target.style.transform = 'scale(0.95)';
-      setTimeout(() => {
-        target.style.transform = 'scale(1)';
-      }, 150);
-      
-      openBooking(id);
+    } catch (e) {
+      modalContent.innerHTML = `<div>Error loading booking form.</div>`;
     }
-    if(target.classList.contains('modal-close')) closeModal();
+  }
+
+  // --------------------------
+  // 8️⃣ Events
+  // --------------------------
+  document.querySelectorAll(".modal-close").forEach((btn) => {
+    btn.addEventListener("click", () =>
+      modal.setAttribute("aria-hidden", "true")
+    );
   });
 
-  // Sign-in button functionality
-  const signinBtn = document.getElementById('signinBtn');
-  if (signinBtn) {
-    signinBtn.addEventListener('click', function() {
-      // Add click animation
-      this.style.transform = 'scale(0.95)';
-      setTimeout(() => {
-        this.style.transform = 'scale(1)';
-        window.location.href = 'signin.html';
-      }, 150);
-    });
-  }
-
-  // Enhanced keyboard navigation
-  document.addEventListener('keydown', e => { 
-    if(e.key === 'Escape') closeModal();
-    
-    // Add smooth scrolling with arrow keys
-    if(e.key === 'ArrowDown' || e.key === 'PageDown') {
-      e.preventDefault();
-      window.scrollBy({ top: 100, behavior: 'smooth' });
-    }
-    if(e.key === 'ArrowUp' || e.key === 'PageUp') {
-      e.preventDefault();
-      window.scrollBy({ top: -100, behavior: 'smooth' });
-    }
+  priceRange?.addEventListener("input", (e) => {
+    priceValue.textContent = e.target.value;
   });
 
-  // Add parallax effect to hero image
-  function initParallax() {
-    window.addEventListener('scroll', () => {
-      const scrolled = window.pageYOffset;
-      const heroImage = document.querySelector('.hero-right img');
-      if (heroImage) {
-        heroImage.style.transform = `translateY(${scrolled * 0.1}px)`;
+  const form = document.getElementById("searchForm");
+  if (form) {
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      const query = formData.get("q");
+      const checkIn = formData.get("checkin");
+      const checkOut = formData.get("checkout");
+      const guests = formData.get("guests");
+
+      if (!query.trim()) {
+        alert("Enter a destination.");
+        return;
+      }
+
+      const response = await api.searchHotels(query, {
+        checkIn,
+        checkOut,
+        guests,
+      });
+
+      if (response.success) {
+        localStorage.setItem(
+          "searchResults",
+          JSON.stringify({
+            hotels: response.data,
+            query,
+            filters: { checkIn, checkOut, guests },
+          })
+        );
+        window.location.href = "search-results.html";
+      } else {
+        alert("Search failed. Try again.");
       }
     });
   }
 
-  // Initialize all enhanced features
-  function init() {
-    document.getElementById('year').textContent = new Date().getFullYear();
-    renderHotels(hotels);
-    renderDeals();
-    initSmoothScroll();
-    initScrollAnimations();
-    initParallax();
-    
-    // Add page load animation
-    document.body.style.opacity = '0';
-    setTimeout(() => {
-      document.body.style.transition = 'opacity 0.5s ease-in';
-      document.body.style.opacity = '1';
-    }, 100);
-  }
-
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-
+  // --------------------------
+  // 9️⃣ Init
+  // --------------------------
+  initUserState();
+  if (hotelGrid) loadHotels();
+  if (dealList) loadDeals();
 })();

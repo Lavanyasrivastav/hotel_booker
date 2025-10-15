@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up | HotelBooker</title>
+  <link rel="stylesheet" href="style3.css" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .form-grid label{display:block;margin:0 0 .25rem 0;font-weight:600}
+    .form-grid input,.form-grid select{display:block;width:100%}
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-grid">
+      <a class="brand" href="index3.html">HotelBooker</a>
+      <nav class="nav">
+        <a href="index3.html#hotels">Hotels</a>
+        <a href="index3.html#deals">Deals</a>
+        <a href="index3.html#about">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding-top:3rem;padding-bottom:3rem;max-width:720px;">
+    <section class="card" style="padding:2rem;">
+      <div style="margin-bottom:1rem;">
+        <h1 style="margin:0 0 .25rem 0;">Create your account</h1>
+        <p class="small" style="color:var(--muted);">Sign up to book hotels, save favorites and manage trips.</p>
+      </div>
+      <form id="signupForm" class="form-grid" aria-label="Sign up form" style="gap:1rem;">
+        <label>Full name
+          <input type="text" name="name" autocomplete="name" required placeholder="Your full name" aria-required="true">
+        </label>
+        <label>Email
+          <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" aria-required="true">
+        </label>
+        <label>Password
+          <input type="password" name="password" autocomplete="new-password" required placeholder="Create a password" aria-required="true">
+        </label>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+          <button type="submit" class="btn btn-primary" style="min-width:140px;">Create account</button>
+          <span class="small">Already a member? <a href="signin.html">Sign in</a></span>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>HotelBooker</strong>
+        <p>© <span id="year"></span></p>
+      </div>
+      <nav class="fnav">
+        <a href="#">Help</a>
+        <a href="#">Terms</a>
+        <a href="#">Privacy</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const form = document.getElementById('signupForm');
+      form.addEventListener('submit', async function(e){
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(form).entries());
+        try {
+          const res = await fetch('http://localhost/hotel-booker/backend/auth.php?action=register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fd)
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert('Signup successful! Please sign in.');
+            window.location.href = 'signin.html';
+          } else {
+            alert(data.error || 'Signup failed');
+          }
+        } catch(err) {
+          alert('Error: ' + err.message);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
